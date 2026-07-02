@@ -1,0 +1,40 @@
+#!/bin/bash
+# Claude Code PostToolUse hook — desktop notification when Claude posts to Slack.
+# Receives the tool-call JSON on stdin: { tool_name, tool_input:{channel_id, message|text, thread_ts}, ... }
+# Shows a banner (channel + trimmed snippet) + plays a sound. macOS + Linux.
+#
+# Change the sound: edit SOUND below.
+#   macOS names (in /System/Library/Sounds): Basso Blow Bottle Frog Funk Glass Hero Morse Ping Pop Purr Sosumi Submarine Tink
+SOUND="Submarine"
+
+payload="$(cat)"
+
+# message body: claude.ai Slack integration uses .message, Pension-Bot server uses .text
+msg="$(printf '%s' "$payload"    | jq -r '.tool_input.message // .tool_input.text // ""' 2>/dev/null)"
+chan="$(printf '%s' "$payload"   | jq -r '.tool_input.channel_id // ""'                 2>/dev/null)"
+thread="$(printf '%s' "$payload" | jq -r '.tool_input.thread_ts // ""'                  2>/dev/null)"
+
+# collapse newlines/whitespace, strip leading dashes, trim to 90 chars
+body="$(printf '%s' "$msg" | tr '\n\t' '  ' | tr -s ' ' | sed 's/^[[:space:]-]*//' | cut -c1-90)"
+[ -z "$body" ] && body="(no text)"
+
+# subtitle = channel (+ 🧵 for a thread reply)
+sub="${chan:-slack}"
+[ -n "$thread" ] && sub="$sub 🧵"
+
+case "$(uname)" in
+  Darwin)
+    # sound (backgrounded so it never blocks) + silent banner (text passed as argv → quote-safe)
+    afplay "/System/Library/Sounds/${SOUND}.aiff" >/dev/null 2>&1 &
+    osascript \
+      -e 'on run argv' \
+      -e 'display notification (item 1 of argv) with title "Claude → Slack ✅" subtitle (item 2 of argv)' \
+      -e 'end run' \
+      "$body" "$sub" 2>/dev/null || true
+    ;;
+  Linux)
+    command -v notify-send >/dev/null 2>&1 && notify-send "Claude → Slack ✅  [$sub]" "$body" 2>/dev/null || true
+    { command -v paplay >/dev/null 2>&1 && paplay /usr/share/sounds/freedesktop/stereo/message.oga; } >/dev/null 2>&1 &
+    ;;
+esac
+exit 0
