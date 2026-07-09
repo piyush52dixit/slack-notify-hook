@@ -11,6 +11,17 @@ MATCHER='.*slack_(send_message|schedule_message|post_message|reply_to_thread).*'
 
 command -v jq >/dev/null 2>&1 || { echo "❌ jq is required. Install: brew install jq (mac) / sudo apt install jq (linux)"; exit 1; }
 
+# 0) macOS: terminal-notifier enables click-to-open (banner → Slack message/channel).
+#    Best-effort install via Homebrew; the hook falls back to a plain banner if it's missing.
+if [ "$(uname)" = "Darwin" ] && ! command -v terminal-notifier >/dev/null 2>&1; then
+  if command -v brew >/dev/null 2>&1; then
+    echo "ℹ️  installing terminal-notifier (enables click-to-open)…"
+    brew install terminal-notifier || echo "⚠️  terminal-notifier install failed — banners will still work (no click-through)."
+  else
+    echo "⚠️  terminal-notifier not found and Homebrew unavailable — install it for click-to-open: brew install terminal-notifier"
+  fi
+fi
+
 # 1) install the hook script
 mkdir -p "$HOOKS_DIR"
 cp "$SRC" "$DEST"
